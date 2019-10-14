@@ -90,6 +90,11 @@ def get_data_iterator(filepath, row_offset, col_offset):
                     yield (i, j, float(value))
 
 
+def get_all_biosphere_flows():
+    labels = get_labels_for_exiobase()
+    return labels["resource_act"][0] + labels['Land_act'][0] + labels['Emiss_act'][0]
+
+
 # inputs = [
 #     ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech", "Principal_production_vector", 8, 1),
 #     ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech", "HIOT", 4, 5),
