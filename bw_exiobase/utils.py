@@ -1,4 +1,5 @@
-from . import DATA_DIR
+from . import CONVERTED_DATA_DIR
+from .version_config import VERSIONS
 from pathlib import Path
 import bz2
 import csv
@@ -11,10 +12,10 @@ def convert_xlsb(workbook, worksheet):
     wb = pyxlsb.open_workbook(workbook)
     sheet = wb.get_sheet(worksheet)
 
-    directory = (DATA_DIR / Path(workbook).name.replace(".xlsb", ""))
+    directory = CONVERTED_DATA_DIR / Path(workbook).name.replace(".xlsb", "")
     directory.mkdir(mode=0o755, exist_ok=True)
 
-    with bz2.open(directory / (worksheet + ".csv.bz2"), "wt", newline='') as compressed:
+    with bz2.open(directory / (worksheet + ".csv.bz2"), "wt", newline="") as compressed:
         writer = csv.writer(compressed)
         for i, row in enumerate(sheet.rows()):
             writer.writerow([c.v for c in row])
@@ -22,19 +23,11 @@ def convert_xlsb(workbook, worksheet):
                 print(f"Row {i}")
 
 
-def convert_exiobase(dirpath):
+def convert_exiobase(dirpath, version="3.3.17 hybrid"):
     dirpath = Path(dirpath)
-    inputs = [
-        ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech.xlsb", "Principal_production_vector"),
-        ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech.xlsb", "HIOT"),
-        ("MR_HIOT_2011_v3_3_17_extensions.xlsb", 'resource_act'),
-        ("MR_HIOT_2011_v3_3_17_extensions.xlsb", 'Land_act'),
-        ("MR_HIOT_2011_v3_3_17_extensions.xlsb", 'Emiss_act'),
-    ]
-
-    for workbook, worksheet in inputs:
-        print("Worksheet: {}".format(worksheet))
-        convert_xlsb(dirpath / workbook, worksheet)
+    for obj in iterate_worksheets(version):
+        print("Worksheet: {}".format(obj["worksheet"]))
+        convert_xlsb(dirpath / (obj["filename"] + ".xlsb"), obj["worksheet"])
 
 
 def labels_for_compressed_data(filepath, row_offset=None, col_offset=None):
@@ -48,14 +41,18 @@ def labels_for_compressed_data(filepath, row_offset=None, col_offset=None):
 
     with bz2.open(filepath, "rt") as f:
         reader = csv.reader(f)
-        col_labels = list(itertools.zip_longest(*[row[col_offset:] for _, row in zip(range(row_offset), reader)]))
+        col_labels = list(
+            itertools.zip_longest(
+                *[row[col_offset:] for _, row in zip(range(row_offset), reader)]
+            )
+        )
         row_labels = [row[:col_offset] for row in reader]
 
     return row_labels, col_labels
 
 
 def get_offsets(filepath):
-    empty = lambda x: x in {None, ''}
+    empty = lambda x: x in {None, ""}
 
     with bz2.open(filepath, "rt") as f:
         reader = csv.reader(f)
@@ -65,21 +62,30 @@ def get_offsets(filepath):
     if not empty(array[0][0]):
         col_offset = row_offset = 0
     else:
-        col_offset = max([j for j, value in enumerate(array[0]) if value in {None, ''}]) + 1
-        row_offset = max([i for i, row in enumerate(array) if row[0] in {None, ''}]) + 1
+        col_offset = (
+            max([j for j, value in enumerate(array[0]) if value in {None, ""}]) + 1
+        )
+        row_offset = max([i for i, row in enumerate(array) if row[0] in {None, ""}]) + 1
 
     return row_offset, col_offset
 
 
-def get_labels_for_exiobase():
-    inputs = [
-        ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech", "Principal_production_vector", 8, 1),
-        ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech", "HIOT", 4, 5),
-        ("MR_HIOT_2011_v3_3_17_extensions", 'resource_act', 4, 2),
-        ("MR_HIOT_2011_v3_3_17_extensions", 'Land_act', 4, 2),
-        ("MR_HIOT_2011_v3_3_17_extensions", 'Emiss_act', 4, 3),
-    ]
-    return {b: labels_for_compressed_data(DATA_DIR / a / (b + ".csv.bz2"), c, d) for a, b, c, d in inputs}
+def iterate_worksheets(version, label=None):
+    if label is None:
+        return (elem for obj in VERSIONS[version].values() for elem in obj)
+    else:
+        return iter(VERSIONS[version][label])
+
+
+def get_labels_for_exiobase(version="3.3.17 hybrid"):
+    return {
+        obj["worksheet"]: labels_for_compressed_data(
+            CONVERTED_DATA_DIR / obj["filename"] / (obj["worksheet"] + ".csv.bz2"),
+            obj["row offset"],
+            obj["col offset"],
+        )
+        for obj in iterate_worksheets(version)
+    }
 
 
 def get_data_iterator(filepath, row_offset, col_offset):
@@ -87,18 +93,23 @@ def get_data_iterator(filepath, row_offset, col_offset):
         for i, row in enumerate(csv.reader(f)):
             for j, value in enumerate(row):
                 if i >= row_offset and j >= col_offset and value and float(value) != 0:
-                    yield (i, j, float(value))
+                    yield (i - row_offset, j - col_offset, float(value))
+
+
+def get_exiobase_data_iterator(version, label, worksheet=None):
+    return itertools.chain(
+        *[
+            get_data_iterator(
+                CONVERTED_DATA_DIR / obj["filename"] / (obj["worksheet"] + ".csv.bz2"),
+                obj["row offset"],
+                obj["col offset"],
+            )
+            for obj in iterate_worksheets(version, label)
+            if (worksheet is None or obj["worksheet"] == worksheet)
+        ]
+    )
 
 
 def get_all_biosphere_flows():
     labels = get_labels_for_exiobase()
-    return labels["resource_act"][0] + labels['Land_act'][0] + labels['Emiss_act'][0]
-
-
-# inputs = [
-#     ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech", "Principal_production_vector", 8, 1),
-#     ("Exiobase_MR_HIOT_2011_v3_3_17_by_prod_tech", "HIOT", 4, 5),
-#     ("MR_HIOT_2011_v3_3_17_extensions", 'resource_act', 4, 2),
-#     ("MR_HIOT_2011_v3_3_17_extensions", 'Land_act', 4, 2),
-#     ("MR_HIOT_2011_v3_3_17_extensions", 'Emiss_act', 4, 3),
-# ]
+    return labels["resource_act"][0] + labels["Land_act"][0] + labels["Emiss_act"][0]
