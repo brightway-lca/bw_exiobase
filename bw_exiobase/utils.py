@@ -4,6 +4,7 @@ from pathlib import Path
 import bz2
 import csv
 import itertools
+import tarfile
 
 
 def convert_xlsb(workbook, worksheet):
@@ -30,6 +31,12 @@ def convert_exiobase(dirpath, version="3.3.17 hybrid"):
         convert_xlsb(dirpath / (obj["filename"] + ".xlsb"), obj["worksheet"])
 
 
+def package_exiobase(version="3.3.17 hybrid"):
+    with tarfile.open(CONVERTED_DATA_DIR / "exiobase-{}.tar".format(version.replace(" ", "-")), "w") as tar:
+        for pth in CONVERTED_DATA_DIR.iterdir():
+            tar.add(CONVERTED_DATA_DIR / pth, arcname=str(pth))
+
+
 def labels_for_compressed_data(filepath, row_offset=None, col_offset=None):
     row_offset_guess, col_offset_guess = get_offsets(filepath)
     if row_offset is None:
@@ -49,25 +56,6 @@ def labels_for_compressed_data(filepath, row_offset=None, col_offset=None):
         row_labels = [row[:col_offset] for row in reader]
 
     return row_labels, col_labels
-
-
-def get_offsets(filepath):
-    empty = lambda x: x in {None, ""}
-
-    with bz2.open(filepath, "rt") as f:
-        reader = csv.reader(f)
-
-        array = [row[:25] for _, row in zip(range(25), reader)]
-
-    if not empty(array[0][0]):
-        col_offset = row_offset = 0
-    else:
-        col_offset = (
-            max([j for j, value in enumerate(array[0]) if value in {None, ""}]) + 1
-        )
-        row_offset = max([i for i, row in enumerate(array) if row[0] in {None, ""}]) + 1
-
-    return row_offset, col_offset
 
 
 def iterate_worksheets(version, label=None):

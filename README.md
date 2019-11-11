@@ -15,10 +15,10 @@ Install `bw_exiobase` using [conda](https://docs.conda.io/en/latest/miniconda.ht
 Then, run the following in a Python shell or Jupyter notebook:
 
     import bw_default_backend as be
-    import brightway_projects as p
-    import brightway_ecoinvent_metadata
+    import bw_projects as p
+    import bw_ecoinvent_metadata
     from bw_exiobase import import_exiobase, convert_exiobase
 
     p.projects.create_project("exiobase", add_base_data=True)
-    brightway_ecoinvent_metadata.add_ecoinvent_metadata()
+    bw_ecoinvent_metadata.add_ecoinvent_metadata()
     import_exiobase()

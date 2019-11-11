@@ -1,6 +1,6 @@
 from .utils import get_labels_for_exiobase, get_exiobase_data_iterator
 from .version_config import VERSIONS
-from brightway_projects import projects
+from bw_projects import projects
 from bw_default_backend import (
     CalculationPackage,
     Activity,
